@@ -51,7 +51,6 @@ function createComponent(name) {
     this.listeners = null;
     this._mountImage = null;
     this._renderedChildren = null;
-    this._mostRecentlyPlacedChild = null;
   };
   ReactARTComponent.displayName = name;
   for (var i = 1, l = arguments.length; i < l; i++) {
@@ -63,6 +62,22 @@ function createComponent(name) {
 
 // ContainerMixin for components that can hold ART nodes
 
+function injectAfter(parentNode, referenceNode, node) {
+  var beforeNode;
+  if (referenceNode == null) {
+    // node is supposed to be first.
+    beforeNode = parentNode.firstChild;
+  } else {
+    // node is supposed to be after referenceNode.
+    beforeNode = referenceNode.nextSibling;
+  }
+  if (beforeNode) {
+    node.injectBefore(beforeNode);
+  } else {
+    node.inject(parentNode);
+  }
+}
+
 var ContainerMixin = assign({}, ReactMultiChild.Mixin, {
 
   /**
@@ -72,57 +87,22 @@ var ContainerMixin = assign({}, ReactMultiChild.Mixin, {
    * @param {number} toIndex Destination index of the element.
    * @protected
    */
-  moveChild: function(child, toIndex) {
+  moveChild: function(child, afterNode, toIndex, lastIndex) {
     var childNode = child._mountImage;
-    var mostRecentlyPlacedChild = this._mostRecentlyPlacedChild;
-    if (mostRecentlyPlacedChild == null) {
-      // I'm supposed to be first.
-      if (childNode.previousSibling) {
-        if (this.node.firstChild) {
-          childNode.injectBefore(this.node.firstChild);
-        } else {
-          childNode.inject(this.node);
-        }
-      }
-    } else {
-      // I'm supposed to be after the previous one.
-      if (mostRecentlyPlacedChild.nextSibling !== childNode) {
-        if (mostRecentlyPlacedChild.nextSibling) {
-          childNode.injectBefore(mostRecentlyPlacedChild.nextSibling);
-        } else {
-          childNode.inject(this.node);
-        }
-      }
-    }
-    this._mostRecentlyPlacedChild = childNode;
+    injectAfter(this.node, afterNode, childNode);
   },
 
   /**
    * Creates a child component.
    *
    * @param {ReactComponent} child Component to create.
+   * @param {object} afterNode
    * @param {object} childNode ART node to insert.
    * @protected
    */
-  createChild: function(child, childNode) {
+  createChild: function(child, afterNode, childNode) {
     child._mountImage = childNode;
-    var mostRecentlyPlacedChild = this._mostRecentlyPlacedChild;
-    if (mostRecentlyPlacedChild == null) {
-      // I'm supposed to be first.
-      if (this.node.firstChild) {
-        childNode.injectBefore(this.node.firstChild);
-      } else {
-        childNode.inject(this.node);
-      }
-    } else {
-      // I'm supposed to be after the previous one.
-      if (mostRecentlyPlacedChild.nextSibling) {
-        childNode.injectBefore(mostRecentlyPlacedChild.nextSibling);
-      } else {
-        childNode.inject(this.node);
-      }
-    }
-    this._mostRecentlyPlacedChild = childNode;
+    injectAfter(this.node, afterNode, childNode);
   },
 
   /**
@@ -153,7 +133,6 @@ var ContainerMixin = assign({}, ReactMultiChild.Mixin, {
    * @override {ReactMultiChild.Mixin.updateChildren}
    */
   updateChildren: function(nextChildren, transaction, context) {
-    this._mostRecentlyPlacedChild = null;
     this._updateChildren(nextChildren, transaction, context);
   },
 
@@ -272,6 +251,7 @@ var NodeMixin = {
   },
 
   getNativeNode: function() {
+    return this.node;
   },
 
   getPublicInstance: function() {
